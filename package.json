@@ -1,0 +1,30 @@
+{
+  "name": "xendit-js-node",
+  "version": "0.0.1",
+  "description": "JS client library for tokenizing credit cards as node modules",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xendit/xendit-js-node"
+  },
+  "author": "0505gonzalez",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/xendit/xendit-js-node/issues"
+  },
+  "homepage": "https://github.com/xendit/xendit-js-node",
+  "devDependencies": {
+    "assert-plus": "^1.0.0",
+    "async": "^2.1.4",
+    "browserify": "^13.1.1",
+    "grunt": "^1.0.1",
+    "grunt-browserify": "^5.0.0",
+    "grunt-contrib-jshint": "^1.0.0",
+    "grunt-contrib-qunit": "^1.2.0",
+    "grunt-contrib-uglify": "^2.0.0",
+    "grunt-contrib-watch": "^1.0.0"
+  },
+  "dependencies": {
+    "fs-extra": "^2.1.2",
+    "underscore": "^1.8.3"
+  }
+}
