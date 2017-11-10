@@ -38,6 +38,10 @@ Card.prototype.createToken = function (transactionData, transactionMetadata, cal
         return callback({ error_code: 'VALIDATION_ERROR', message: 'Card CVN is invalid' });
     }
 
+    if (!CreditCardUtil.isCreditCardCVNValidForCardType(transactionData.card_cvn, transactionData.card_number)) {
+        return callback({ error_code: 'VALIDATION_ERROR', message: 'Card CVN is invalid for this card type' });
+    }
+
     this._getTokenizedCreditCard(transactionData, function (err, tokenizedCreditCard) {
         if (err) {
             return callback(err);
@@ -93,6 +97,10 @@ Card.prototype.validateExpiry = function (expMonth, expYear) {
 
 Card.prototype.validateCvn = function (cvn) {
     return CreditCardUtil.isCreditCardCVNValid(cvn);
+};
+
+Card.prototype.validateCvnForCardType = function (cvn, cardNumber) {
+    return CreditCardUtil.isCreditCardCVNValidForCardType(cvn, cardNumber);
 };
 
 Card.prototype._getTokenizationConfiguration = function (callback) {

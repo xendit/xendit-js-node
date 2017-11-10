@@ -39,6 +39,18 @@ CreditCardUtil.isCreditCardCVNValid = function (creditCardCVN) {
     }
 };
 
+CreditCardUtil.isCreditCardCVNValidForCardType = function (creditCardCVN, cardNumber) {
+    if (creditCardCVN) {
+        if (NUMBER_REGEX.test(creditCardCVN) && Number(creditCardCVN)) {
+            return CreditCardUtil._isCardAmex(cardNumber) ? String(creditCardCVN).length === 4 : String(creditCardCVN).length === 3;
+        }
+
+        return false;
+    } else {
+        return true;
+    }
+};
+
 CreditCardUtil.getCardType = function (cardNumber) {
     if (cardNumber.indexOf('4') === 0)  {
         if (CreditCardUtil._isCardVisaElectron(cardNumber)) {
