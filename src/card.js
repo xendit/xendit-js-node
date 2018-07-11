@@ -22,8 +22,8 @@ Card.prototype.createToken = function (transactionData, transactionMetadata, cal
         transactionMetadata = null;
     }
 
-    if (!transactionData.is_multiple_use && (isNaN(transactionData.amount) || Number(transactionData.amount) <= 0)) {
-        return callback({ error_code: 'VALIDATION_ERROR', message: 'Amount must be a number greater than 0' });
+    if (!transactionData.is_multiple_use && (isNaN(transactionData.amount) || Number(transactionData.amount) < 0)) {
+        return callback({ error_code: 'VALIDATION_ERROR', message: 'Amount must be a number equal or greater than 0' });
     }
 
     if (!CreditCardUtil.isCreditCardNumberValid(transactionData.card_number)) {
@@ -70,8 +70,8 @@ Card.prototype.createAuthentication = function (authenticationData, transactionM
         transactionMetadata = null;
     }
 
-    if (isNaN(authenticationData.amount) || Number(authenticationData.amount) <= 0) {
-        return callback({ error_code: 'VALIDATION_ERROR', message: 'Amount must be a number greater than 0' });
+    if (isNaN(authenticationData.amount) || Number(authenticationData.amount) < 0) {
+        return callback({ error_code: 'VALIDATION_ERROR', message: 'Amount must be a number equal or greater than 0' });
     }
 
     if ((typeof authenticationData.token_id) !== 'string') {
