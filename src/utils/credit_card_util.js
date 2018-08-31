@@ -18,7 +18,8 @@ CreditCardUtil.isCreditCardNumberValid = function (creditCardNumber) {
     return NUMBER_REGEX.test(creditCardNumber) &&
         creditCardNumber.length >= 12 &&
         creditCardNumber.length <= 19 &&
-        CreditCardUtil.getCardType(creditCardNumber) !== null;
+        CreditCardUtil.getCardType(creditCardNumber) !== null &&
+        CreditCardUtil.isValidLuhnNumber(creditCardNumber);
 };
 
 CreditCardUtil.isCreditCardExpirationDateValid = function (cardExpirationMonth, cardExpirationYear) {
@@ -49,6 +50,27 @@ CreditCardUtil.isCreditCardCVNValidForCardType = function (creditCardCVN, cardNu
     } else {
         return true;
     }
+};
+
+CreditCardUtil.isValidLuhnNumber = function (cardNumber) {
+    var sum = 0, bEven = false;
+	cardNumber = cardNumber.replace(/\D/g, '');
+
+	for (var n = cardNumber.length - 1; n >= 0; n--) {
+		var cDigit = cardNumber.charAt(n);
+		var nDigit = parseInt(cDigit, 10);
+
+		if (bEven) {
+			if ((nDigit *= 2) > 9) {
+                nDigit -= 9;
+            }
+		}
+
+		sum += nDigit;
+		bEven = !bEven;
+	}
+
+	return (sum % 10) === 0;
 };
 
 CreditCardUtil.getCardType = function (cardNumber) {
