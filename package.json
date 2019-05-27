@@ -1,6 +1,6 @@
 {
   "name": "xendit-js-node",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "description": "JS client library for tokenizing credit cards as node modules",
   "main": "./src/xendit.js",
   "repository": {
@@ -25,7 +25,8 @@
     "grunt-contrib-watch": "^1.0.0"
   },
   "dependencies": {
-    "fs-extra": "^2.1.2",
-    "underscore": "^1.8.3"
+    "base-64": "~0.1.0",
+    "fs-extra": "~2.1.2",
+    "underscore": "~1.8.3"
   }
 }

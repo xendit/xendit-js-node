@@ -11,7 +11,40 @@ function Card (Xendit) {
     this._xendit = Xendit;
 }
 
-Card.prototype.createToken = function (transactionData, transactionMetadata, callback) {
+Card.prototype.createToken = function (tokenData, callback) {
+    tokenData.is_multiple_use = tokenData.is_multiple_use !== undefined ? tokenData.is_multiple_use : false;
+    tokenData.should_authenticate = tokenData.should_authenticate !== undefined ? tokenData.should_authenticate : true;
+
+    if (!tokenData.is_multiple_use && (isNaN(tokenData.amount) || Number(tokenData.amount) < 0)) {
+        return callback({ error_code: 'VALIDATION_ERROR', message: 'Amount must be a number equal or greater than 0' });
+    }
+
+    if (!CreditCardUtil.isCreditCardNumberValid(tokenData.card_number)) {
+        return callback({ error_code: 'VALIDATION_ERROR', message: 'Card number is invalid' });
+    }
+
+    if (!CreditCardUtil.isCreditCardExpirationDateValid(tokenData.card_exp_month, tokenData.card_exp_year)) {
+        return callback({ error_code: 'VALIDATION_ERROR', message: 'Card expiration date is invalid' });
+    }
+
+    if (!CreditCardUtil.isCreditCardCVNValid(tokenData.card_cvn)) {
+        return callback({ error_code: 'VALIDATION_ERROR', message: 'Card CVN is invalid' });
+    }
+
+    if (!CreditCardUtil.isCreditCardCVNValidForCardType(tokenData.card_cvn, tokenData.card_number)) {
+        return callback({ error_code: 'VALIDATION_ERROR', message: 'Card CVN is invalid for this card type' });
+    }
+
+    this._createCreditCardToken(tokenData, function (err, creditCardCharge) {
+        if (err) {
+            return callback(err);
+        }
+
+        callback(null, creditCardCharge);
+    });
+};
+
+Card.prototype.createTokenV1 = function (transactionData, transactionMetadata, callback) {
     var self = this;
 
     transactionData.is_multiple_use = transactionData.is_multiple_use !== undefined ? transactionData.is_multiple_use : false;
@@ -52,7 +85,7 @@ Card.prototype.createToken = function (transactionData, transactionMetadata, cal
             transactionMetadata.device_fingerprint_id = self._xendit._device_fingerprint_id;
         }
 
-        self._createCreditCardToken(tokenizedCreditCard.token, transactionData, transactionMetadata, function (err, creditCardCharge) {
+        self._createCreditCardTokenV1(tokenizedCreditCard.token, transactionData, transactionMetadata, function (err, creditCardCharge) {
             if (err) {
                 return callback(err);
             }
@@ -172,7 +205,43 @@ Card.prototype._tokenizeCreditCard = function (tokenizationConfiguration, transa
     });
 };
 
-Card.prototype._createCreditCardToken = function (creditCardToken, transactionData, transactionMetadata, callback) {
+Card.prototype._createCreditCardToken = function (tokenData, callback) {
+    var publicApiKey = this._xendit._getPublishableKey();
+    var basicAuthCredentials = 'Basic ' + window.btoa(publicApiKey + ':');
+    var xenditBaseURL = this._xendit._getXenditURL();
+
+    var body = {
+        is_single_use: !tokenData.is_multiple_use,
+        card_data: {
+            account_number: tokenData.card_number,
+            exp_month: tokenData.card_exp_month,
+            exp_year: tokenData.card_exp_year,
+            cvn: tokenData.card_cvn
+        },
+        should_authenticate: tokenData.should_authenticate,
+    };
+    
+    if(!body.is_single_use && body.card_data.cvn === '' || body.card_data.cvn === null) {
+        delete body.card_data.cvn;
+    }
+
+    if (tokenData.amount !== undefined && tokenData.amount !== '') {
+        body.amount = tokenData.amount;
+    }
+
+    if (tokenData.card_cvn !== undefined && tokenData.card_cvn !== '') {
+        body.card_cvn = tokenData.card_cvn;
+    }
+
+    RequestUtil.request({
+        method: 'POST',
+        url: xenditBaseURL + '/v2/credit_card_tokens',
+        headers: { Authorization: basicAuthCredentials },
+        body: body
+    }, callback);
+};
+
+Card.prototype._createCreditCardTokenV1 = function (creditCardToken, transactionData, transactionMetadata, callback) {
     var publicApiKey = this._xendit._getPublishableKey();
     var basicAuthCredentials = 'Basic ' + window.btoa(publicApiKey + ':');
     var xenditBaseURL = this._xendit._getXenditURL();
