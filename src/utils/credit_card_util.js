@@ -1,5 +1,9 @@
 'use strict';
 
+const date = new Date();
+const currentYear = date.getFullYear();
+const currentMonth = date.getMonth() + 1;
+
 function CreditCardUtil() {}
 
 var CYBCardTypes = {
@@ -23,12 +27,19 @@ CreditCardUtil.isCreditCardNumberValid = function (creditCardNumber) {
 };
 
 CreditCardUtil.isCreditCardExpirationDateValid = function (cardExpirationMonth, cardExpirationYear) {
-    return NUMBER_REGEX.test(cardExpirationMonth) &&
-        NUMBER_REGEX.test(cardExpirationYear) &&
-        Number(cardExpirationMonth) >= 1 &&
-        Number(cardExpirationMonth) <= 12 &&
-        Number(cardExpirationYear) >= 2016 &&
-        Number(cardExpirationYear) <= 2100;
+    if (
+        !NUMBER_REGEX.test(cardExpirationMonth) ||
+        NUMBER_REGEX.test(cardExpirationYear)
+    ) return false; // check if input is number
+
+    const expMonth = Number(cardExpirationMonth);
+    const expYear = Number(cardExpirationYear);
+    return (
+        expYear >= currentYear &&
+        expYear <= 2100 &&
+        expMonth <= 12 &&
+        expMonth >= currentMonth
+    ); // check if valid value range
 };
 
 CreditCardUtil.isCreditCardCVNValid = function (creditCardCVN) {
