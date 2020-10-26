@@ -3,6 +3,8 @@
 var RequestUtil = require('./utils/request_util');
 var CreditCardUtil = require('./utils/credit_card_util');
 
+var CLIENT_TYPE = 'XENDIT_JS';
+
 if (!window.btoa) {
     window.btoa = require('base-64').encode;
 }
@@ -266,6 +268,7 @@ Card.prototype._createCreditCardToken = function (tokenData, callback) {
 
     var headers = {
         Authorization: basicAuthCredentials,
+        'client-type': CLIENT_TYPE,
         'client-version': pjson.version
     };
 
@@ -347,14 +350,16 @@ Card.prototype._createAuthenticationEmv = function(createAuthenticationData, cal
             var body = {
                 amount: createAuthenticationData.amount,
                 currency: createAuthenticationData.currency,
-                session_id: session_id,
-                client_type: CLIENT_TYPE
+                session_id: session_id
             };
 
             RequestUtil.request({
                 method: 'POST',
                 url: xenditBaseURL + '/credit_card_tokens/' + createAuthenticationData.token_id + '/authentications',
-                headers: { Authorization: basicAuthCredentials },
+                headers: {
+                    Authorization: basicAuthCredentials,
+                    'client-type': CLIENT_TYPE
+                },
                 body: body
             }, function(err, authenticationData) {
                 if (err) {
