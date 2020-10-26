@@ -12,6 +12,7 @@ function Card (Xendit) {
 }
 
 Card.prototype.createToken = function (tokenData, callback) {
+    var self = this;
     tokenData.is_multiple_use = tokenData.is_multiple_use !== undefined ? tokenData.is_multiple_use : false;
     tokenData.should_authenticate = tokenData.should_authenticate !== undefined ? tokenData.should_authenticate : true;
 
@@ -38,6 +39,27 @@ Card.prototype.createToken = function (tokenData, callback) {
     this._createCreditCardToken(tokenData, function (err, creditCardCharge) {
         if (err) {
             return callback(err);
+        }
+
+        if (creditCardToken.threeds_version === '2.0') {
+            self.createAuthentication({
+                amount: tokenData.amount,
+                token_id: creditCardToken.id,
+                jwt: creditCardToken.jwt,
+                environment: creditCardToken.environment
+            }, function (err, authentication) {
+                if (err) {
+                    return callback(err);
+                }
+        
+                callback(null, {
+                    id: authentication.credit_card_token_id,
+                    authentication_id: authentication.id,
+                    masked_card_number: authentication.masked_card_number,
+                    status: authentication.status,
+                    metadata: authentication.metadata
+                });
+            });
         }
 
         callback(null, creditCardCharge);
@@ -111,13 +133,22 @@ Card.prototype.createAuthentication = function (authenticationData, transactionM
         return callback({ error_code: 'VALIDATION_ERROR', message: 'Token id must be a string' });
     }
 
-    self._createAuthentication(authenticationData, transactionMetadata, function (err, authentication) {
-        if (err) {
-            return callback(err);
-        }
+    if (authenticationData.jwt) {
+        self._createAuthenticationEmv(authenticationData, function (err, authentication) {
+            if (err) {
+                return callback(err);
+            }
+            return callback(null, authentication);
+        });
+    } else {
+        self._createAuthentication(authenticationData, transactionMetadata, function (err, authentication) {
+            if (err) {
+                return callback(err);
+            }
 
-        callback(null, authentication);
-    });
+            callback(null, authentication);
+        });
+    }
 };
 
 Card.prototype.validateCardNumber = function (cardNumber) {
@@ -291,6 +322,90 @@ Card.prototype._createAuthentication = function (authenticationData, transaction
         headers: { Authorization: basicAuthCredentials },
         body: body
     }, callback);
+};
+
+Card.prototype._createAuthenticationEmv = function(createAuthenticationData, callback) {
+    var self = this;
+    var publicApiKey = this._xendit._getPublishableKey();
+    var basicAuthCredentials = 'Basic ' + window.btoa(publicApiKey + ':');
+    var xenditBaseURL = this._xendit._getXenditURL();
+
+    self._xendit.loadSongBird(createAuthenticationData.environment, function() {
+        self._createCardinalSession(createAuthenticationData.jwt, function(err, session_id) {
+            if (err) {
+                return callback(err);
+            }
+            var body = {
+                amount: createAuthenticationData.amount,
+                currency: createAuthenticationData.currency,
+                session_id: session_id,
+                client_type: CLIENT_TYPE
+            };
+
+            RequestUtil.request({
+                method: 'POST',
+                url: xenditBaseURL + '/credit_card_tokens/' + createAuthenticationData.token_id + '/authentications',
+                headers: { Authorization: basicAuthCredentials },
+                body: body
+            }, function(err, authenticationData) {
+                if (err) {
+                    return callback(err);
+                }
+                if (authenticationData.status === 'FAILED' || authenticationData.status === 'VERIFIED') {
+                    return callback(null, authenticationData);
+                }
+                self._verifyAuthenticationEmv(authenticationData, callback);
+            });
+        });
+    });
+};
+
+Card.prototype._createCardinalSession = function(jwt, callback) {
+    window.Cardinal.on('payments.setupComplete', function (setupCompleteData) {
+
+        if (setupCompleteData) {
+            window.Cardinal.off('payments.setupComplete');
+            window.Cardinal.trigger('bin.process', '400000');
+            setTimeout(function () {
+                callback(null, setupCompleteData.sessionId); 
+            }, BIN_CHECK_TIMEOUT);
+        }
+    });
+
+    window.Cardinal.setup('init', {
+        jwt: jwt
+    });
+};
+
+Card.prototype._verifyAuthenticationEmv = function (authenticationData, callback) {
+    var publicApiKey = this._xendit._getPublishableKey();
+    var basicAuthCredentials = 'Basic ' + window.btoa(publicApiKey + ':');
+    var xenditBaseURL = this._xendit._getXenditURL();
+
+    window.Cardinal.on('payments.validated', function () {
+        window.Cardinal.off('payments.validated');
+        var body = {
+            authentication_transaction_id: authenticationData.authentication_transaction_id
+        };
+
+        RequestUtil.request({
+            method: 'POST',
+            url: xenditBaseURL + '/credit_card_authentications/' + authenticationData.id + '/verification',
+            headers: { Authorization: basicAuthCredentials },
+            body: body
+        }, callback);
+    });
+    window.Cardinal.continue('cca',
+        {
+            AcsUrl: authenticationData.acs_url,
+            Payload: authenticationData.pa_req,
+        },
+        {
+            OrderDetails: {
+                TransactionId: authenticationData.authentication_transaction_id
+            }
+        }
+    );
 };
 
 module.exports = Card;
