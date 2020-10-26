@@ -264,10 +264,19 @@ Card.prototype._createCreditCardToken = function (tokenData, callback) {
         body.card_cvn = tokenData.card_cvn;
     }
 
+    var headers = {
+        Authorization: basicAuthCredentials,
+        'client-version': pjson.version
+    };
+
+    if(tokenData.on_behalf_of) {
+        headers['for-user-id'] = tokenData.on_behalf_of;
+    }
+
     RequestUtil.request({
         method: 'POST',
         url: xenditBaseURL + '/v2/credit_card_tokens',
-        headers: { Authorization: basicAuthCredentials },
+        headers: headers,
         body: body
     }, callback);
 };
