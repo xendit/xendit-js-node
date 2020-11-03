@@ -38,7 +38,7 @@ Card.prototype.createToken = function (tokenData, callback) {
         return callback({ error_code: 'VALIDATION_ERROR', message: 'Card CVN is invalid for this card type' });
     }
 
-    this._createCreditCardToken(tokenData, function (err, creditCardCharge) {
+    this._createCreditCardToken(tokenData, function (err, creditCardToken) {
         if (err) {
             return callback(err);
         }
@@ -48,12 +48,17 @@ Card.prototype.createToken = function (tokenData, callback) {
                 amount: tokenData.amount,
                 token_id: creditCardToken.id,
                 jwt: creditCardToken.jwt,
-                environment: creditCardToken.environment
+                environment: creditCardToken.environment,
+                bin_number: tokenData.card_number.slice(0, 6)
             }, function (err, authentication) {
                 if (err) {
                     return callback(err);
                 }
-        
+
+                if (authentication.status === 'IN_REVIEW') {
+                    callback(null, authentication);
+                }
+
                 callback(null, {
                     id: authentication.credit_card_token_id,
                     authentication_id: authentication.id,
@@ -62,9 +67,9 @@ Card.prototype.createToken = function (tokenData, callback) {
                     metadata: authentication.metadata
                 });
             });
+        } else {
+            callback(null, creditCardToken);
         }
-
-        callback(null, creditCardCharge);
     });
 };
 
@@ -170,14 +175,12 @@ Card.prototype.validateCvnForCardType = function (cvn, cardNumber) {
 };
 
 Card.prototype._getTokenizationConfiguration = function (callback) {
-    var publicApiKey = this._xendit._getPublishableKey();
-    var basicAuthCredentials = 'Basic ' + window.btoa(publicApiKey + ':');
-    var xenditBaseURL = this._xendit._getXenditURL();
+    var option = RequestUtil.getServerOptions(this._xendit);
 
     RequestUtil.request({
         method: 'GET',
-        url: xenditBaseURL + '/credit_card_tokenization_configuration',
-        headers: { Authorization: basicAuthCredentials }
+        url: option.url + '/credit_card_tokenization_configuration',
+        headers: option.headers
     }, callback);
 };
 
@@ -239,9 +242,7 @@ Card.prototype._tokenizeCreditCard = function (tokenizationConfiguration, transa
 };
 
 Card.prototype._createCreditCardToken = function (tokenData, callback) {
-    var publicApiKey = this._xendit._getPublishableKey();
-    var basicAuthCredentials = 'Basic ' + window.btoa(publicApiKey + ':');
-    var xenditBaseURL = this._xendit._getXenditURL();
+    var option = RequestUtil.getServerOptions(this._xendit);
 
     var body = {
         is_single_use: !tokenData.is_multiple_use,
@@ -252,6 +253,8 @@ Card.prototype._createCreditCardToken = function (tokenData, callback) {
             cvn: tokenData.card_cvn
         },
         should_authenticate: tokenData.should_authenticate,
+        billing_details: tokenData.billing_details,
+        customer: tokenData.customer
     };
     
     if(!body.is_single_use && body.card_data.cvn === '' || body.card_data.cvn === null) {
@@ -266,11 +269,7 @@ Card.prototype._createCreditCardToken = function (tokenData, callback) {
         body.card_cvn = tokenData.card_cvn;
     }
 
-    var headers = {
-        Authorization: basicAuthCredentials,
-        'client-type': CLIENT_TYPE,
-        'client-version': pjson.version
-    };
+    var headers = option.headers;
 
     if(tokenData.on_behalf_of) {
         headers['for-user-id'] = tokenData.on_behalf_of;
@@ -278,16 +277,14 @@ Card.prototype._createCreditCardToken = function (tokenData, callback) {
 
     RequestUtil.request({
         method: 'POST',
-        url: xenditBaseURL + '/v2/credit_card_tokens',
+        url: option.url + '/v2/credit_card_tokens',
         headers: headers,
         body: body
     }, callback);
 };
 
 Card.prototype._createCreditCardTokenV1 = function (creditCardToken, transactionData, transactionMetadata, callback) {
-    var publicApiKey = this._xendit._getPublishableKey();
-    var basicAuthCredentials = 'Basic ' + window.btoa(publicApiKey + ':');
-    var xenditBaseURL = this._xendit._getXenditURL();
+    var option = RequestUtil.getServerOptions(this._xendit);
 
     var body = {
         is_authentication_bundled: !transactionData.is_multiple_use,
@@ -309,16 +306,14 @@ Card.prototype._createCreditCardTokenV1 = function (creditCardToken, transaction
 
     RequestUtil.request({
         method: 'POST',
-        url: xenditBaseURL + '/credit_card_tokens',
-        headers: { Authorization: basicAuthCredentials },
+        url: option.url + '/credit_card_tokens',
+        headers: option,headers,
         body: body
     }, callback);
 };
 
 Card.prototype._createAuthentication = function (authenticationData, transactionMetadata, callback) {
-    var publicApiKey = this._xendit._getPublishableKey();
-    var basicAuthCredentials = 'Basic ' + window.btoa(publicApiKey + ':');
-    var xenditBaseURL = this._xendit._getXenditURL();
+    var option = RequestUtil.getServerOptions(this._xendit);
 
     var body = {
         amount: authenticationData.amount
@@ -330,20 +325,18 @@ Card.prototype._createAuthentication = function (authenticationData, transaction
 
     RequestUtil.request({
         method: 'POST',
-        url: xenditBaseURL + '/credit_card_tokens/' + authenticationData.token_id + '/authentications',
-        headers: { Authorization: basicAuthCredentials },
+        url: option.url + '/credit_card_tokens/' + authenticationData.token_id + '/authentications',
+        headers: option.headers,
         body: body
     }, callback);
 };
 
 Card.prototype._createAuthenticationEmv = function(createAuthenticationData, callback) {
     var self = this;
-    var publicApiKey = this._xendit._getPublishableKey();
-    var basicAuthCredentials = 'Basic ' + window.btoa(publicApiKey + ':');
-    var xenditBaseURL = this._xendit._getXenditURL();
+    var option = RequestUtil.getServerOptions(this._xendit);
 
     self._xendit.loadSongBird(createAuthenticationData.environment, function() {
-        self._createCardinalSession(createAuthenticationData.jwt, function(err, session_id) {
+        self._createCardinalSession(createAuthenticationData, function(err, session_id) {
             if (err) {
                 return callback(err);
             }
@@ -355,17 +348,16 @@ Card.prototype._createAuthenticationEmv = function(createAuthenticationData, cal
 
             RequestUtil.request({
                 method: 'POST',
-                url: xenditBaseURL + '/credit_card_tokens/' + createAuthenticationData.token_id + '/authentications',
-                headers: {
-                    Authorization: basicAuthCredentials,
-                    'client-type': CLIENT_TYPE
-                },
+                url: option.url + '/credit_card_tokens/' + createAuthenticationData.token_id + '/authentications',
+                headers: option.headers,
                 body: body
             }, function(err, authenticationData) {
                 if (err) {
                     return callback(err);
                 }
-                if (authenticationData.status === 'FAILED' || authenticationData.status === 'VERIFIED') {
+
+                var is3DS2Enrolled = RequestUtil.hasHigherOrEqualMajorVersion(authenticationData.threeds_version, 2);
+                if (authenticationData.status === 'FAILED' || authenticationData.status === 'VERIFIED' || !is3DS2Enrolled) {
                     return callback(null, authenticationData);
                 }
                 self._verifyAuthenticationEmv(authenticationData, callback);
@@ -374,12 +366,12 @@ Card.prototype._createAuthenticationEmv = function(createAuthenticationData, cal
     });
 };
 
-Card.prototype._createCardinalSession = function(jwt, callback) {
+Card.prototype._createCardinalSession = function(createCardinalSessionData, callback) {
     window.Cardinal.on('payments.setupComplete', function (setupCompleteData) {
 
         if (setupCompleteData) {
             window.Cardinal.off('payments.setupComplete');
-            window.Cardinal.trigger('bin.process', '400000');
+            window.Cardinal.trigger('bin.process', createCardinalSessionData.bin_number);
             setTimeout(function () {
                 callback(null, setupCompleteData.sessionId); 
             }, BIN_CHECK_TIMEOUT);
@@ -387,14 +379,12 @@ Card.prototype._createCardinalSession = function(jwt, callback) {
     });
 
     window.Cardinal.setup('init', {
-        jwt: jwt
+        jwt: createCardinalSessionData.jwt
     });
 };
 
 Card.prototype._verifyAuthenticationEmv = function (authenticationData, callback) {
-    var publicApiKey = this._xendit._getPublishableKey();
-    var basicAuthCredentials = 'Basic ' + window.btoa(publicApiKey + ':');
-    var xenditBaseURL = this._xendit._getXenditURL();
+    var option = RequestUtil.getServerOptions(this._xendit);
 
     window.Cardinal.on('payments.validated', function () {
         window.Cardinal.off('payments.validated');
@@ -404,8 +394,8 @@ Card.prototype._verifyAuthenticationEmv = function (authenticationData, callback
 
         RequestUtil.request({
             method: 'POST',
-            url: xenditBaseURL + '/credit_card_authentications/' + authenticationData.id + '/verification',
-            headers: { Authorization: basicAuthCredentials },
+            url: option.url + '/credit_card_authentications/' + authenticationData.id + '/verification',
+            headers: option.headers,
             body: body
         }, callback);
     });
