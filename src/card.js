@@ -42,8 +42,8 @@ Card.prototype.createToken = function (tokenData, callback) {
         if (err) {
             return callback(err);
         }
-
-        if (creditCardToken.threeds_version === '2.0') {
+        
+        if (RequestUtil.hasHigherOrEqualMajorVersion(creditCardToken.threeds_version, 2)) {
             self.createAuthentication({
                 amount: tokenData.amount,
                 token_id: creditCardToken.id,
