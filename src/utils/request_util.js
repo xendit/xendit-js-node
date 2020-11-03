@@ -1,6 +1,9 @@
 'use strict';
 
+var pjson = require('../../package.json');
+
 var RequestUtil = {};
+var CLIENT_TYPE = 'XENDIT_JS';
 
 RequestUtil.request = function (requestData, responseHandler) {
     var request = new XMLHttpRequest();
@@ -32,6 +35,28 @@ RequestUtil.request = function (requestData, responseHandler) {
     }
 
     request.send(body);
+};
+
+RequestUtil.getServerOptions = function (xendit) {
+    var publicApiKey = xendit._getPublishableKey();
+    var basicAuthCredentials = 'Basic ' + window.btoa(publicApiKey + ':');
+    var xenditBaseURL = xendit._getXenditURL();
+
+    var headers = {
+        Authorization: basicAuthCredentials,
+        'client-type': CLIENT_TYPE,
+        'client-version': pjson.version
+    };
+
+    return {
+        headers: headers,
+        url: xenditBaseURL
+    };
+};
+
+RequestUtil.hasHigherOrEqualMajorVersion = function (versionString, majorVersion) {
+    var currentMajorVersion = versionString ? versionString.slice(0, versionString.indexOf('.')) : 1;
+    return Number(currentMajorVersion) >= majorVersion;
 };
 
 module.exports = RequestUtil;

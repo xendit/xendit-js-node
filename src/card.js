@@ -3,6 +3,8 @@
 var RequestUtil = require('./utils/request_util');
 var CreditCardUtil = require('./utils/credit_card_util');
 
+var CLIENT_TYPE = 'XENDIT_JS';
+
 if (!window.btoa) {
     window.btoa = require('base-64').encode;
 }
@@ -12,6 +14,7 @@ function Card (Xendit) {
 }
 
 Card.prototype.createToken = function (tokenData, callback) {
+    var self = this;
     tokenData.is_multiple_use = tokenData.is_multiple_use !== undefined ? tokenData.is_multiple_use : false;
     tokenData.should_authenticate = tokenData.should_authenticate !== undefined ? tokenData.should_authenticate : true;
 
@@ -35,12 +38,38 @@ Card.prototype.createToken = function (tokenData, callback) {
         return callback({ error_code: 'VALIDATION_ERROR', message: 'Card CVN is invalid for this card type' });
     }
 
-    this._createCreditCardToken(tokenData, function (err, creditCardCharge) {
+    this._createCreditCardToken(tokenData, function (err, creditCardToken) {
         if (err) {
             return callback(err);
         }
+        
+        if (RequestUtil.hasHigherOrEqualMajorVersion(creditCardToken.threeds_version, 2)) {
+            self.createAuthentication({
+                amount: tokenData.amount,
+                token_id: creditCardToken.id,
+                jwt: creditCardToken.jwt,
+                environment: creditCardToken.environment,
+                bin_number: tokenData.card_number.slice(0, 6)
+            }, function (err, authentication) {
+                if (err) {
+                    return callback(err);
+                }
 
-        callback(null, creditCardCharge);
+                if (authentication.status === 'IN_REVIEW') {
+                    callback(null, authentication);
+                }
+
+                callback(null, {
+                    id: authentication.credit_card_token_id,
+                    authentication_id: authentication.id,
+                    masked_card_number: authentication.masked_card_number,
+                    status: authentication.status,
+                    metadata: authentication.metadata
+                });
+            });
+        } else {
+            callback(null, creditCardToken);
+        }
     });
 };
 
@@ -111,13 +140,22 @@ Card.prototype.createAuthentication = function (authenticationData, transactionM
         return callback({ error_code: 'VALIDATION_ERROR', message: 'Token id must be a string' });
     }
 
-    self._createAuthentication(authenticationData, transactionMetadata, function (err, authentication) {
-        if (err) {
-            return callback(err);
-        }
+    if (authenticationData.jwt) {
+        self._createAuthenticationEmv(authenticationData, function (err, authentication) {
+            if (err) {
+                return callback(err);
+            }
+            return callback(null, authentication);
+        });
+    } else {
+        self._createAuthentication(authenticationData, transactionMetadata, function (err, authentication) {
+            if (err) {
+                return callback(err);
+            }
 
-        callback(null, authentication);
-    });
+            callback(null, authentication);
+        });
+    }
 };
 
 Card.prototype.validateCardNumber = function (cardNumber) {
@@ -137,14 +175,12 @@ Card.prototype.validateCvnForCardType = function (cvn, cardNumber) {
 };
 
 Card.prototype._getTokenizationConfiguration = function (callback) {
-    var publicApiKey = this._xendit._getPublishableKey();
-    var basicAuthCredentials = 'Basic ' + window.btoa(publicApiKey + ':');
-    var xenditBaseURL = this._xendit._getXenditURL();
+    var option = RequestUtil.getServerOptions(this._xendit);
 
     RequestUtil.request({
         method: 'GET',
-        url: xenditBaseURL + '/credit_card_tokenization_configuration',
-        headers: { Authorization: basicAuthCredentials }
+        url: option.url + '/credit_card_tokenization_configuration',
+        headers: option.headers
     }, callback);
 };
 
@@ -206,9 +242,7 @@ Card.prototype._tokenizeCreditCard = function (tokenizationConfiguration, transa
 };
 
 Card.prototype._createCreditCardToken = function (tokenData, callback) {
-    var publicApiKey = this._xendit._getPublishableKey();
-    var basicAuthCredentials = 'Basic ' + window.btoa(publicApiKey + ':');
-    var xenditBaseURL = this._xendit._getXenditURL();
+    var option = RequestUtil.getServerOptions(this._xendit);
 
     var body = {
         is_single_use: !tokenData.is_multiple_use,
@@ -219,6 +253,8 @@ Card.prototype._createCreditCardToken = function (tokenData, callback) {
             cvn: tokenData.card_cvn
         },
         should_authenticate: tokenData.should_authenticate,
+        billing_details: tokenData.billing_details,
+        customer: tokenData.customer
     };
     
     if(!body.is_single_use && body.card_data.cvn === '' || body.card_data.cvn === null) {
@@ -233,18 +269,22 @@ Card.prototype._createCreditCardToken = function (tokenData, callback) {
         body.card_cvn = tokenData.card_cvn;
     }
 
+    var headers = option.headers;
+
+    if(tokenData.on_behalf_of) {
+        headers['for-user-id'] = tokenData.on_behalf_of;
+    }
+
     RequestUtil.request({
         method: 'POST',
-        url: xenditBaseURL + '/v2/credit_card_tokens',
-        headers: { Authorization: basicAuthCredentials },
+        url: option.url + '/v2/credit_card_tokens',
+        headers: headers,
         body: body
     }, callback);
 };
 
 Card.prototype._createCreditCardTokenV1 = function (creditCardToken, transactionData, transactionMetadata, callback) {
-    var publicApiKey = this._xendit._getPublishableKey();
-    var basicAuthCredentials = 'Basic ' + window.btoa(publicApiKey + ':');
-    var xenditBaseURL = this._xendit._getXenditURL();
+    var option = RequestUtil.getServerOptions(this._xendit);
 
     var body = {
         is_authentication_bundled: !transactionData.is_multiple_use,
@@ -266,16 +306,14 @@ Card.prototype._createCreditCardTokenV1 = function (creditCardToken, transaction
 
     RequestUtil.request({
         method: 'POST',
-        url: xenditBaseURL + '/credit_card_tokens',
-        headers: { Authorization: basicAuthCredentials },
+        url: option.url + '/credit_card_tokens',
+        headers: option,headers,
         body: body
     }, callback);
 };
 
 Card.prototype._createAuthentication = function (authenticationData, transactionMetadata, callback) {
-    var publicApiKey = this._xendit._getPublishableKey();
-    var basicAuthCredentials = 'Basic ' + window.btoa(publicApiKey + ':');
-    var xenditBaseURL = this._xendit._getXenditURL();
+    var option = RequestUtil.getServerOptions(this._xendit);
 
     var body = {
         amount: authenticationData.amount
@@ -287,10 +325,91 @@ Card.prototype._createAuthentication = function (authenticationData, transaction
 
     RequestUtil.request({
         method: 'POST',
-        url: xenditBaseURL + '/credit_card_tokens/' + authenticationData.token_id + '/authentications',
-        headers: { Authorization: basicAuthCredentials },
+        url: option.url + '/credit_card_tokens/' + authenticationData.token_id + '/authentications',
+        headers: option.headers,
         body: body
     }, callback);
+};
+
+Card.prototype._createAuthenticationEmv = function(createAuthenticationData, callback) {
+    var self = this;
+    var option = RequestUtil.getServerOptions(this._xendit);
+
+    self._xendit.loadSongBird(createAuthenticationData.environment, function() {
+        self._createCardinalSession(createAuthenticationData, function(err, session_id) {
+            if (err) {
+                return callback(err);
+            }
+            var body = {
+                amount: createAuthenticationData.amount,
+                currency: createAuthenticationData.currency,
+                session_id: session_id
+            };
+
+            RequestUtil.request({
+                method: 'POST',
+                url: option.url + '/credit_card_tokens/' + createAuthenticationData.token_id + '/authentications',
+                headers: option.headers,
+                body: body
+            }, function(err, authenticationData) {
+                if (err) {
+                    return callback(err);
+                }
+
+                var is3DS2Enrolled = RequestUtil.hasHigherOrEqualMajorVersion(authenticationData.threeds_version, 2);
+                if (authenticationData.status === 'FAILED' || authenticationData.status === 'VERIFIED' || !is3DS2Enrolled) {
+                    return callback(null, authenticationData);
+                }
+                self._verifyAuthenticationEmv(authenticationData, callback);
+            });
+        });
+    });
+};
+
+Card.prototype._createCardinalSession = function(createCardinalSessionData, callback) {
+    window.Cardinal.on('payments.setupComplete', function (setupCompleteData) {
+
+        if (setupCompleteData) {
+            window.Cardinal.off('payments.setupComplete');
+            window.Cardinal.trigger('bin.process', createCardinalSessionData.bin_number);
+            setTimeout(function () {
+                callback(null, setupCompleteData.sessionId); 
+            }, BIN_CHECK_TIMEOUT);
+        }
+    });
+
+    window.Cardinal.setup('init', {
+        jwt: createCardinalSessionData.jwt
+    });
+};
+
+Card.prototype._verifyAuthenticationEmv = function (authenticationData, callback) {
+    var option = RequestUtil.getServerOptions(this._xendit);
+
+    window.Cardinal.on('payments.validated', function () {
+        window.Cardinal.off('payments.validated');
+        var body = {
+            authentication_transaction_id: authenticationData.authentication_transaction_id
+        };
+
+        RequestUtil.request({
+            method: 'POST',
+            url: option.url + '/credit_card_authentications/' + authenticationData.id + '/verification',
+            headers: option.headers,
+            body: body
+        }, callback);
+    });
+    window.Cardinal.continue('cca',
+        {
+            AcsUrl: authenticationData.acs_url,
+            Payload: authenticationData.pa_req,
+        },
+        {
+            OrderDetails: {
+                TransactionId: authenticationData.authentication_transaction_id
+            }
+        }
+    );
 };
 
 module.exports = Card;
