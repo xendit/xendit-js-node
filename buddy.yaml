@@ -1,0 +1,22 @@
+- pipeline: "Publish Libraru"
+  trigger_mode: "MANUAL"
+  ref_name: "master"
+  ref_type: "BRANCH"
+  priority: "NORMAL"
+  fail_on_prepare_env_warning: true
+  trigger_condition: "ALWAYS"
+  actions:
+  - action: "Execute: npm publish"
+    type: "BUILD"
+    working_directory: "/buddy/xendit-js-node"
+    docker_image_name: "library/node"
+    docker_image_tag: "12"
+    execute_commands:
+    - "rm .npmrc"
+    - "npm config set @boxbag:registry https://registry.npmjs.org/"
+    - "npm config set //registry.npmjs.org/:_authToken $NPM_PUBLISH_TOKEN"
+    - "npm publish"
+    volume_mappings:
+    - "/:/buddy/xendit-js-node"
+    trigger_condition: "ALWAYS"
+    shell: "BASH"
