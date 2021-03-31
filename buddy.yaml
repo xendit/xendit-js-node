@@ -1,6 +1,6 @@
 - pipeline: "Publish Libraru"
   trigger_mode: "MANUAL"
-  ref_name: "master"
+  ref_name: "((refs/pull/\\d+)|(master)|(staging)|(release))"
   ref_type: "BRANCH"
   priority: "NORMAL"
   fail_on_prepare_env_warning: true
