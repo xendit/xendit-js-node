@@ -18,7 +18,6 @@ CreditCardUtil.isCreditCardNumberValid = function (creditCardNumber) {
     return NUMBER_REGEX.test(creditCardNumber) &&
         creditCardNumber.length >= 12 &&
         creditCardNumber.length <= 19 &&
-        CreditCardUtil.getCardType(creditCardNumber) !== null &&
         CreditCardUtil.isValidLuhnNumber(creditCardNumber);
 };
 
