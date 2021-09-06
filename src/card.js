@@ -3,8 +3,10 @@
 var RequestUtil = require('./utils/request_util');
 var CreditCardUtil = require('./utils/credit_card_util');
 
-if (!window.btoa) {
-    window.btoa = require('base-64').encode;
+if (typeof window !== 'undefined') {
+    if (!window.btoa) {
+        window.btoa = require('base-64').encode;
+    }
 }
 
 function Card (Xendit) {
