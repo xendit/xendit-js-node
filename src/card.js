@@ -221,7 +221,6 @@ Card.prototype._createCreditCardToken = function (tokenData, callback) {
             cvn: tokenData.card_cvn
         },
         should_authenticate: tokenData.should_authenticate,
-        currency: tokenData.currency && tokenData.currency
     };
     
     if(!body.is_single_use && body.card_data.cvn === '' || body.card_data.cvn === null) {
@@ -234,6 +233,10 @@ Card.prototype._createCreditCardToken = function (tokenData, callback) {
 
     if (tokenData.card_cvn !== undefined && tokenData.card_cvn !== '') {
         body.card_cvn = tokenData.card_cvn;
+    }
+
+    if(tokenData.currency !== undefined && tokenData.currency !== '') {
+        body.currency = tokenData.currency;
     }
 
     RequestUtil.request({
