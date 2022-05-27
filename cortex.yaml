@@ -18,6 +18,7 @@ info:
   x-cortex-dependency: []
   x-cortex-service-groups:
   - node
+  - tool
   x-cortex-link:
   - url: https://xendit.atlassian.net/wiki/spaces/CA/pages/2162263615/Cards+Handbook
     name: Issue Handling Handbook
