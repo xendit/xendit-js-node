@@ -1,0 +1,41 @@
+- pipeline: "Double publish module to NPM & github"
+  trigger_mode: "ON_EVERY_PUSH"
+  ref_name: "refs/tags/*"
+  ref_type: "WILDCARD"
+  priority: "NORMAL"
+  fetch_all_refs: true
+  trigger_condition: "ALWAYS"
+  actions:
+  - action: 'Execute: npm publish for github (new) registry'
+    type: 'BUILD'
+    working_directory: "/buddy/xendit-js-node"
+    docker_image_name: 'library/node'
+    docker_image_tag: '10'
+    execute_commands:
+      # move to client path
+      - "cd $CLIENT_PATH"
+      # Add tokens for github and NPM
+      - 'echo -ne "# npm registry config\n//registry.npmjs.org/:_authToken=$NPM_PUBLISH_TOKEN\n@boxbag:registry=https://registry.npmjs.org/\n\r# github registry config\n//npm.pkg.github.com/:_authToken=$GITHUB_REGISTRY_TOKEN\n@xendit:registry=https://npm.pkg.github.com/" >> .npmrc'
+      # update package's scope to publish to NPM boxbag's registry
+      - "if [[ $BUDDY_EXECUTION_TAG != v$(node -p -e \"require('./package.json').version\") ]];"
+      - "then"
+      - "  echo \"Github release tag does not match package.json version tag\""
+      - "  exit 1"
+      - "fi"
+      - sed -ie '/name/s/xendit/boxbag/' package.json
+      - npm install
+      - npm publish
+
+      # publish
+      # update package's scope to publish to xendit's github registry
+      - 'sedRepoString=", \"repository\": { \"type\": \"git\", \"url\": \"git+https:\/\/github.com\/xendit\/xendit-js-node.git\" }"'
+      - 'sed -i -e "$(( $( wc -l < package.json) -1 ))s/$/\n$sedRepoString/" package.json'
+      - sed -ie '/name/s/boxbag/xendit/' package.json
+      - "npm ci"
+      - "npm publish"
+      - rm .npmrc
+    volume_mappings:
+      - "/:/buddy/xendit-js-node"
+    trigger_condition: 'ALWAYS'
+    ignore_errors: true
+    shell: 'BASH'
