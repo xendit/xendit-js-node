@@ -22,15 +22,17 @@
       - "  echo \"Github release tag does not match package.json version tag\""
       - "  exit 1"
       - "fi"
-      - sed -ie '/name/s/xendit/boxbag/' package.json
+      - sed -ie '/name/s/@xendit/@boxbag/' package.json
       - npm install
+      # remove/modify this line if you have a different build script
+      - npm run build
       - npm publish
 
       # publish
       # update package's scope to publish to xendit's github registry
       - 'sedRepoString=", \"repository\": { \"type\": \"git\", \"url\": \"git+https:\/\/github.com\/xendit\/xendit-js-node.git\" }"'
       - 'sed -i -e "$(( $( wc -l < package.json) -1 ))s/$/\n$sedRepoString/" package.json'
-      - sed -ie '/name/s/boxbag/xendit/' package.json
+      - sed -ie '/name/s/@boxbag/@xendit/' package.json
       - "npm ci"
       - "npm publish"
       - rm .npmrc
