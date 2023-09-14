@@ -235,6 +235,10 @@ Card.prototype._createCreditCardToken = function (tokenData, callback) {
         body.card_cvn = tokenData.card_cvn;
     }
 
+    if(tokenData.currency !== undefined && tokenData.currency !== '') {
+        body.currency = tokenData.currency;
+    }
+
     RequestUtil.request({
         method: 'POST',
         url: xenditBaseURL + '/v2/credit_card_tokens',
