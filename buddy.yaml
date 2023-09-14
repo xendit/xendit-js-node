@@ -10,7 +10,7 @@
     type: "BUILD"
     working_directory: "/buddy/xendit-js-node"
     docker_image_name: "library/node"
-    docker_image_tag: "12"
+    docker_image_tag: "18"
     execute_commands:
     - "npm config set @boxbag:registry https://registry.npmjs.org/"
     - "npm config set //registry.npmjs.org/:_authToken $NPM_PUBLISH_TOKEN"
