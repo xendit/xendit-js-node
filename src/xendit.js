@@ -2,7 +2,7 @@
 
 var Card = require('./card');
 
-var STAGING_XENDIT_BASE_URL = 'https://api-staging.xendit.co';
+var STAGING_XENDIT_BASE_URL = 'https://api.stg.tidnex.dev';
 var PRODUCTION_XENDIT_BASE_URL = 'https://api.xendit.co';
 
 function Xendit() {}
