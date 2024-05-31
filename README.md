@@ -1,4 +1,6 @@
-# xendit-js-node
+# xendit-js-node (DEPRECATED)
+
+This package is no longer being maintained. Please refer to this [page](https://docs.xendit.co/credit-cards/integrations/tokenization) and the subsequent pages to integrate with us.
 
 ## Ownership
 
